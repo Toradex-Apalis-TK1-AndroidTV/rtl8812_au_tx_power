@@ -32,7 +32,6 @@
 #endif /* Linux kernel >= 4.0.0 */
 
 #include <rtw_wifi_regd.h>
-#include <hal_data.h>
 
 #define RTW_MAX_MGMT_TX_CNT (8)
 #define RTW_MAX_MGMT_TX_MS_GAS (500)
@@ -145,7 +144,7 @@ static struct ieee80211_rate rtw_rates[] = {
 #define RTW_G_RATES_NUM	12
 
 #define RTW_2G_CHANNELS_NUM 14
-#define RTW_5G_CHANNELS_NUM 41
+#define RTW_5G_CHANNELS_NUM 39
 
 static struct ieee80211_channel rtw_2ghz_channels[] = {
 	CHAN2G(1, 2412, 0),
@@ -170,16 +169,16 @@ static struct ieee80211_channel rtw_5ghz_a_channels[] = {
 	CHAN5G(42, 0),		CHAN5G(44, 0),
 	CHAN5G(46, 0),		CHAN5G(48, 0),
 	CHAN5G(52, 0),		CHAN5G(56, 0),
-	CHAN5G(58, 0),		CHAN5G(60, 0),
-	CHAN5G(62, 0),		CHAN5G(64, 0),
+	CHAN5G(60, 0),		CHAN5G(64, 0),
 	CHAN5G(100, 0),		CHAN5G(104, 0),
 	CHAN5G(108, 0),		CHAN5G(112, 0),
 	CHAN5G(116, 0),		CHAN5G(120, 0),
 	CHAN5G(124, 0),		CHAN5G(128, 0),
 	CHAN5G(132, 0),		CHAN5G(136, 0),
-	CHAN5G(140, 0),		CHAN5G(144, 0),	CHAN5G(149, 0),
-	CHAN5G(153, 0),		CHAN5G(157, 0),
-	CHAN5G(161, 0),		CHAN5G(165, 0), CHAN5G(169, 0),
+	CHAN5G(140, 0),		CHAN5G(149, 0),
+	CHAN5G(151, 0),		CHAN5G(153, 0),
+	CHAN5G(155, 0),		CHAN5G(157, 0),
+	CHAN5G(161, 0),		CHAN5G(165, 0),
 	CHAN5G(184, 0),		CHAN5G(188, 0),
 	CHAN5G(192, 0),		CHAN5G(196, 0),
 	CHAN5G(200, 0),		CHAN5G(204, 0),
@@ -758,7 +757,7 @@ void rtw_cfg80211_indicate_connect(_adapter *padapter)
 	}
 #endif //CONFIG_P2P
 
-	{
+	if (check_fwstate(pmlmepriv, WIFI_MONITOR_STATE) != _TRUE) {
 		WLAN_BSSID_EX  *pnetwork = &(padapter->mlmeextpriv.mlmext_info.network);
 		struct wlan_network *scanned = pmlmepriv->cur_network_scanned;
 
@@ -877,11 +876,8 @@ void rtw_cfg80211_indicate_disconnect(_adapter *padapter)
 		}
 	}
 #endif //CONFIG_P2P
-	#ifdef SUPPLICANT_RTK_VERSION_LOWER_THAN_JB42
+
 	if (!padapter->mlmepriv.not_indic_disco || padapter->ndev_unregistering) {
-	#else
-	{
-	#endif	
 		#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 11, 0) || defined(COMPAT_KERNEL_RELEASE)			
 		DBG_8192C("pwdev->sme_state(b)=%d\n", pwdev->sme_state);
 
@@ -897,13 +893,11 @@ void rtw_cfg80211_indicate_disconnect(_adapter *padapter)
 		#else
 
 		if (check_fwstate(&padapter->mlmepriv, _FW_LINKED)) {
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 2, 0))
-			u8 locally_generated = 1;
 			DBG_871X(FUNC_ADPT_FMT" call cfg80211_disconnected\n", FUNC_ADPT_ARG(padapter));
-			cfg80211_disconnected(padapter->pnetdev, 0, NULL, 0, locally_generated, GFP_ATOMIC);
-#else
-			DBG_871X(FUNC_ADPT_FMT" call cfg80211_disconnected\n", FUNC_ADPT_ARG(padapter));
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 2, 0)
 			cfg80211_disconnected(padapter->pnetdev, 0, NULL, 0, GFP_ATOMIC);
+#else
+			cfg80211_disconnected(padapter->pnetdev, 0, NULL, 0, true, GFP_ATOMIC);
 #endif
 		} else {
 			DBG_871X(FUNC_ADPT_FMT" call cfg80211_connect_result\n", FUNC_ADPT_ARG(padapter));
@@ -1294,7 +1288,7 @@ _func_enter_;
 
 			wep_key_len = wep_key_len <= 5 ? 5 : 13;
 
-			psecuritypriv->ndisencryptstatus = Ndis802_11Encryption1Enabled;
+              	psecuritypriv->ndisencryptstatus = Ndis802_11Encryption1Enabled;
 			psecuritypriv->dot11PrivacyAlgrthm = _WEP40_;
 			psecuritypriv->dot118021XGrpPrivacy = _WEP40_;
 
@@ -3137,9 +3131,7 @@ static int cfg80211_rtw_leave_ibss(struct wiphy *wiphy, struct net_device *ndev)
 
 	DBG_871X(FUNC_NDEV_FMT"\n", FUNC_NDEV_ARG(ndev));
 
-	#ifdef SUPPLICANT_RTK_VERSION_LOWER_THAN_JB42
 	padapter->mlmepriv.not_indic_disco = _TRUE;
-	#endif
 	
 	old_type = rtw_wdev->iftype;
 	
@@ -3162,9 +3154,7 @@ static int cfg80211_rtw_leave_ibss(struct wiphy *wiphy, struct net_device *ndev)
 	}
 
 leave_ibss:
-	#ifdef SUPPLICANT_RTK_VERSION_LOWER_THAN_JB42
 	padapter->mlmepriv.not_indic_disco = _FALSE;
-	#endif
 
 	return 0;
 }
@@ -3188,13 +3178,11 @@ static int cfg80211_rtw_connect(struct wiphy *wiphy, struct net_device *ndev,
 	struct security_priv *psecuritypriv = &padapter->securitypriv;
 	_queue *queue = &pmlmepriv->scanned_queue;	
 
-	#ifdef SUPPLICANT_RTK_VERSION_LOWER_THAN_JB42
 	padapter->mlmepriv.not_indic_disco = _TRUE;
-	#endif
 	
 	DBG_871X("=>"FUNC_NDEV_FMT" - Start to Connection\n", FUNC_NDEV_ARG(ndev));
-	DBG_871X("privacy=%d, key=%p, key_len=%d, key_idx=%d, auth_type=%d\n",
-		sme->privacy, sme->key, sme->key_len, sme->key_idx, sme->auth_type);
+	DBG_871X("privacy=%d, key=%p, key_len=%d, key_idx=%d\n",
+		sme->privacy, sme->key, sme->key_len, sme->key_idx);
 
 
 	if(adapter_wdev_data(padapter)->block == _TRUE)
@@ -3321,7 +3309,9 @@ static int cfg80211_rtw_connect(struct wiphy *wiphy, struct net_device *ndev,
 	}
 
 	//For WEP Shared auth
-	if (sme->key_len > 0 && sme->key)
+	if((psecuritypriv->dot11AuthAlgrthm == dot11AuthAlgrthm_Shared
+		|| psecuritypriv->dot11AuthAlgrthm == dot11AuthAlgrthm_Auto) && sme->key
+	)
 	{
 		u32 wep_key_idx, wep_key_len,wep_total_len;
 		NDIS_802_11_WEP	 *pwep = NULL;
@@ -3417,9 +3407,7 @@ exit:
 
 	DBG_8192C("<=%s, ret %d\n",__FUNCTION__, ret);
 
-	#ifdef SUPPLICANT_RTK_VERSION_LOWER_THAN_JB42
 	padapter->mlmepriv.not_indic_disco = _FALSE;
-	#endif
 
 	return ret;
 }
@@ -3431,9 +3419,7 @@ static int cfg80211_rtw_disconnect(struct wiphy *wiphy, struct net_device *ndev,
 
 	DBG_871X(FUNC_NDEV_FMT" - Start to Disconnect\n", FUNC_NDEV_ARG(ndev));
 
-	#ifdef SUPPLICANT_RTK_VERSION_LOWER_THAN_JB42
 	padapter->mlmepriv.not_indic_disco = _TRUE;
-	#endif
 
 	rtw_set_to_roam(padapter, 0);
 
@@ -3451,9 +3437,7 @@ static int cfg80211_rtw_disconnect(struct wiphy *wiphy, struct net_device *ndev,
 		rtw_pwr_wakeup(padapter);		
 	}
 
-	#ifdef SUPPLICANT_RTK_VERSION_LOWER_THAN_JB42
 	padapter->mlmepriv.not_indic_disco = _FALSE;
-	#endif
 
 	DBG_871X(FUNC_NDEV_FMT" return 0\n", FUNC_NDEV_ARG(ndev));
 	return 0;
@@ -3464,29 +3448,38 @@ static int cfg80211_rtw_set_txpower(struct wiphy *wiphy,
 	struct wireless_dev *wdev,
 #endif
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36)) || defined(COMPAT_KERNEL_RELEASE)
-	enum nl80211_tx_power_setting type,
+	enum nl80211_tx_power_setting type, int mbm)
 #else
-	enum tx_power_setting type,
+	enum tx_power_setting type, int dbm)
 #endif
-	int value)
 {
-	_adapter *padapter = wiphy_to_adapter(wiphy);
-	HAL_DATA_TYPE	*pHalData = GET_HAL_DATA(padapter);
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36)) || defined(COMPAT_KERNEL_RELEASE)
-	value /= 100;
-#endif
+#if 0
+	struct iwm_priv *iwm = wiphy_to_iwm(wiphy);
+	int ret;
 
-	if(value < 0)
-		value = 0;
-	if(value > 40)
-		value = 40;
+	switch (type) {
+	case NL80211_TX_POWER_AUTOMATIC:
+		return 0;
+	case NL80211_TX_POWER_FIXED:
+		if (mbm < 0 || (mbm % 100))
+			return -EOPNOTSUPP;
 
-	if(type == NL80211_TX_POWER_FIXED) {
-		pHalData->CurrentTxPwrIdx = value;
-		rtw_hal_set_tx_power_level(padapter, pHalData->CurrentChannel);
-	} else
+		if (!test_bit(IWM_STATUS_READY, &iwm->status))
+			return 0;
+
+		ret = iwm_umac_set_config_fix(iwm, UMAC_PARAM_TBL_CFG_FIX,
+					      CFG_TX_PWR_LIMIT_USR,
+					      MBM_TO_DBM(mbm) * 2);
+		if (ret < 0)
+			return ret;
+
+		return iwm_tx_power_trigger(iwm);
+	default:
+		IWM_ERR(iwm, "Unsupported power type: %d\n", type);
 		return -EOPNOTSUPP;
-
+	}
+#endif
+	DBG_8192C("%s\n", __func__);
 	return 0;
 }
 
@@ -3496,10 +3489,9 @@ static int cfg80211_rtw_get_txpower(struct wiphy *wiphy,
 #endif
 	int *dbm)
 {
-	_adapter *padapter = wiphy_to_adapter(wiphy);
-	HAL_DATA_TYPE	*pHalData = GET_HAL_DATA(padapter);
+	DBG_8192C("%s\n", __func__);
 
-	*dbm = pHalData->CurrentTxPwrIdx;
+	*dbm = (12);
 	
 	return 0;
 }
@@ -3658,7 +3650,7 @@ void rtw_cfg80211_indicate_sta_assoc(_adapter *padapter, u8 *pmgmt_frame, uint f
 		else // WIFI_REASSOCREQ
 			ie_offset = _REASOCREQ_IE_OFFSET_;
 	
-		memset(&sinfo, 0, sizeof(sinfo));
+		sinfo.filled = 0;
 		sinfo.filled = STATION_INFO_ASSOC_REQ_IES;
 		sinfo.assoc_req_ies = pmgmt_frame + WLAN_HDR_A3_LEN + ie_offset;
 		sinfo.assoc_req_ies_len = frame_len - WLAN_HDR_A3_LEN - ie_offset;
@@ -3980,7 +3972,12 @@ static int rtw_cfg80211_add_monitor_if(_adapter *padapter, char *name, struct ne
 	mon_ndev->type = ARPHRD_IEEE80211_RADIOTAP;
 	strncpy(mon_ndev->name, name, IFNAMSIZ);
 	mon_ndev->name[IFNAMSIZ - 1] = 0;
-	mon_ndev->destructor = rtw_ndev_destructor;
+#if (LINUX_VERSION_CODE>=KERNEL_VERSION(4,11,9))
+	mon_ndev->needs_free_netdev = false;
+	mon_ndev->priv_destructor = rtw_ndev_destructor;
+#else
+  	mon_ndev->destructor = rtw_ndev_destructor;
+#endif
 	
 #if (LINUX_VERSION_CODE>=KERNEL_VERSION(2,6,29))
 	mon_ndev->netdev_ops = &rtw_cfg80211_monitor_if_ops;
@@ -4600,118 +4597,6 @@ static int	cfg80211_rtw_set_monitor_channel(struct wiphy *wiphy, struct cfg80211
 }
 #endif
 
-static int cfg80211_rtw_get_channel(struct wiphy *wiphy, struct wireless_dev *wdev, struct cfg80211_chan_def *chandef){
-  _adapter *padapter= wiphy_to_adapter(wiphy);
-  int channel;
-  int control_freq;
-  int center_freq;
-  int center_freq2=0;
-  int width;
-  int band;
-  int bandWidth;
-  int offset;
-  
-  struct dvobj_priv *dvobj;
-  struct net_device *ndev = wdev->netdev;
-  HAL_DATA_TYPE	*pHalData = GET_HAL_DATA(padapter);
-  if (!ndev)
-    return -ENODEV;
-  
-  offset = rtw_get_oper_choffset(padapter);
-  channel = adapter_to_dvobj(padapter)->oper_channel;
-
-  if(channel >= 1){
-    switch(pHalData->CurrentBandType){
-      case 0:
-	band = NL80211_BAND_2GHZ;
-	break;
-      case 1:
-	band = NL80211_BAND_5GHZ;
-	break;
-      default:
-	return -EINVAL;
-	
-    }
-    control_freq =  ieee80211_channel_to_frequency(channel, band);
-    
-    dvobj=adapter_to_dvobj(padapter);
-    if(dvobj!=NULL){
-      bandWidth = adapter_to_dvobj(padapter)->oper_bwmode;
-      DBG_871X("%s bw %d\n", __func__,adapter_to_dvobj(padapter)->oper_bwmode);
-    }else{
-      bandWidth = pHalData->CurrentChannelBW;
-      DBG_871X("%s dvobj null\n", __func__);
-    }
-    switch(pHalData->CurrentChannelBW){
-      case CHANNEL_WIDTH_20:
-	DBG_871X("%s width 20\n", __func__);
-	width = NL80211_CHAN_WIDTH_20;
-	center_freq = control_freq;
-	break;
-      case CHANNEL_WIDTH_40:
-	DBG_871X("%s width 40\n", __func__);
-	width = NL80211_CHAN_WIDTH_40;
-	if(offset==HAL_PRIME_CHNL_OFFSET_LOWER){
-	  center_freq = control_freq +10;
-	}else{
-	  center_freq = control_freq -10;
-	}
-	break;
-      case CHANNEL_WIDTH_80:
-	DBG_871X("%s width 80\n", __func__);
-	width = NL80211_CHAN_WIDTH_80;
-	if(offset==HAL_PRIME_CHNL_OFFSET_LOWER){
-	  center_freq = control_freq +30;
-	}else{
-	  center_freq = control_freq -30;
-	}
-	break;
-      case CHANNEL_WIDTH_160:
-	DBG_871X("%s width 160\n", __func__);
-	width = NL80211_CHAN_WIDTH_160;
-	if(offset==HAL_PRIME_CHNL_OFFSET_LOWER){
-	  center_freq = control_freq +50;
-	}else{
-	  center_freq = control_freq -50;
-	}
-	break;
-      case CHANNEL_WIDTH_80_80:
-	DBG_871X("%s width 80x80\n", __func__);
-	width = NL80211_CHAN_WIDTH_80P80;
-	if(offset==HAL_PRIME_CHNL_OFFSET_LOWER){
-	  center_freq = control_freq +30;
-	  center_freq2=center_freq+80;
-	}else{
-	  center_freq = control_freq -30;
-	  center_freq2=center_freq-80;
-	}
-	break;
-      case CHANNEL_WIDTH_MAX:
-	DBG_871X("%s width max\n", __func__);
-	width = NL80211_CHAN_WIDTH_160;
-	break;
-    }
-    chandef->chan = ieee80211_get_channel(wiphy, control_freq);
-    if(chandef->chan == NULL){
-      chandef->chan = ieee80211_get_channel(wiphy, ieee80211_channel_to_frequency(channel, band));
-      DBG_871X("%s chan null\n", __func__);
-      if(chandef->chan == NULL){
-	DBG_871X("%s chan null\n", __func__);
-	return -EINVAL;
-      }
-    }
-    chandef->width = width;
-    chandef->center_freq1 = center_freq;
-    chandef->center_freq2 = center_freq2;  
-    DBG_871X("%s : channel %d width %d freq1 %d freq2 %d center_freq %d offset %d\n", __func__, channel, width, chandef->center_freq1, chandef->center_freq2, chandef->chan->center_freq,rtw_get_oper_choffset(padapter));
-
-  }else{
-      return -EINVAL;
-  }
-  return 0;
- 
-}
-
 static int	cfg80211_rtw_set_channel(struct wiphy *wiphy
 	#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,35))
 	, struct net_device *ndev
@@ -4748,7 +4633,6 @@ static int	cfg80211_rtw_set_channel(struct wiphy *wiphy
 	}
 
 	set_channel_bwmode(padapter, chan_target, chan_offset, chan_width);
-
 	DBG_871X("%s : %d\n", __func__, chan_target);
 	return 0;
 }
@@ -6475,35 +6359,21 @@ static void rtw_cfg80211_init_ht_capab(_adapter *padapter, struct ieee80211_sta_
 	
 }
 
-static void rtw_cfg80211_create_vht_cap(_adapter *padapter, struct ieee80211_sta_vht_cap *vht_cap)
+static void rtw_cfg80211_create_vht_cap(struct ieee80211_sta_vht_cap *vht_cap)
 {
-#ifdef CONFIG_80211AC_VHT
-	static int highest_rates[] = {433, 866, 1300, 1733}; // 80 MHz
 	u16 mcs_map;
 	int i;
-	HAL_DATA_TYPE	*pHalData = GET_HAL_DATA(padapter);
-	struct mlme_priv 		*pmlmepriv = &padapter->mlmepriv;
-	struct vht_priv		*pvhtpriv = &pmlmepriv->vhtpriv;
 
 	vht_cap->vht_supported = 1;
-	vht_cap->cap = IEEE80211_VHT_CAP_RXLDPC|IEEE80211_VHT_CAP_SHORT_GI_80|IEEE80211_VHT_CAP_TXSTBC|
-		IEEE80211_VHT_CAP_SU_BEAMFORMEE_CAPABLE;
+	vht_cap->cap = IEEE80211_VHT_CAP_RXLDPC;
 
 	mcs_map = 0;
 	for (i = 0; i < 8; i++) {
-		if(i < pHalData->NumTotalRFPath)
-			mcs_map |= IEEE80211_VHT_MCS_SUPPORT_0_9 << (i*2);
-		else
-			mcs_map |= IEEE80211_VHT_MCS_NOT_SUPPORTED << (i*2);
+		mcs_map |= IEEE80211_VHT_MCS_SUPPORT_0_9 << (i*2);
 	}
 
-	vht_cap->vht_mcs.tx_mcs_map =
 	vht_cap->vht_mcs.rx_mcs_map = cpu_to_le16(mcs_map);
-	vht_cap->vht_mcs.tx_highest =
-	vht_cap->vht_mcs.rx_highest = cpu_to_le16(highest_rates[pHalData->NumTotalRFPath-1]);
-#else
-	vht_cap->vht_supported = 0;
-#endif
+	vht_cap->vht_mcs.tx_mcs_map = cpu_to_le16(mcs_map);
 }
 
 void rtw_cfg80211_init_wiphy(_adapter *padapter)
@@ -6528,7 +6398,7 @@ void rtw_cfg80211_init_wiphy(_adapter *padapter)
 		bands = wiphy->bands[IEEE80211_BAND_5GHZ];
 		if(bands) {
 			rtw_cfg80211_init_ht_capab(padapter, &bands->ht_cap, IEEE80211_BAND_5GHZ, rf_type);
-			rtw_cfg80211_create_vht_cap(padapter, &bands->vht_cap);
+			rtw_cfg80211_create_vht_cap(&bands->vht_cap);
 		}
 	}
 #endif
@@ -6623,10 +6493,6 @@ static void rtw_cfg80211_preinit_wiphy(_adapter *adapter, struct wiphy *wiphy)
 	if (IsSupported5G(adapter->registrypriv.wireless_mode))
 		wiphy->bands[IEEE80211_BAND_5GHZ] = rtw_spt_band_alloc(IEEE80211_BAND_5GHZ);
 #endif
-
-#if defined(CONFIG_NET_NS)
-	wiphy->flags |= WIPHY_FLAG_NETNS_OK;
-#endif //CONFIG_NET_NS
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,38) && LINUX_VERSION_CODE < KERNEL_VERSION(3,0,0))
 	wiphy->flags |= WIPHY_FLAG_SUPPORTS_SEPARATE_DEFAULT_KEYS;
@@ -6748,7 +6614,6 @@ static struct cfg80211_ops rtw_cfg80211_ops = {
 	.sched_scan_start = cfg80211_rtw_sched_scan_start,
 	.sched_scan_stop = cfg80211_rtw_sched_scan_stop,
 #endif /* CONFIG_PNO_SUPPORT */
-	.get_channel = cfg80211_rtw_get_channel,
 };
 
 struct wiphy *rtw_wiphy_alloc(_adapter *padapter, struct device *dev)
@@ -6899,16 +6764,14 @@ void rtw_wdev_unregister(struct wireless_dev *wdev)
 
 	rtw_cfg80211_indicate_scan_done(adapter, _TRUE);
 
-	#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 2, 0))
-	if (wdev->current_bss) {
-		u8 locally_generated = 1;
-		DBG_871X(FUNC_ADPT_FMT" clear current_bss by cfg80211_disconnected\n", FUNC_ADPT_ARG(adapter));
-		cfg80211_disconnected(adapter->pnetdev, 0, NULL, 0, locally_generated, GFP_ATOMIC);
-	}
-	#elif ((LINUX_VERSION_CODE >= KERNEL_VERSION(3, 11, 0)) && (LINUX_VERSION_CODE < KERNEL_VERSION(4, 2, 0))) || defined(COMPAT_KERNEL_RELEASE)	
+	#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 11, 0)) || defined(COMPAT_KERNEL_RELEASE)	
 	if (wdev->current_bss) {
 		DBG_871X(FUNC_ADPT_FMT" clear current_bss by cfg80211_disconnected\n", FUNC_ADPT_ARG(adapter));
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 2, 0)
 		cfg80211_disconnected(adapter->pnetdev, 0, NULL, 0, GFP_ATOMIC);
+#else
+		cfg80211_disconnected(adapter->pnetdev, 0, NULL, 0, true, GFP_ATOMIC);
+#endif
 	}
 	#endif
 
