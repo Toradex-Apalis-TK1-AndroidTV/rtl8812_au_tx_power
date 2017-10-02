@@ -351,6 +351,10 @@ struct registry_priv
 	u32		reg_rxgain_offset_5gl;
 	u32		reg_rxgain_offset_5gm;
 	u32		reg_rxgain_offset_5gh;
+		
+#ifdef CONFIG_SW_LED
+	u8 led_ctrl;
+#endif
 };
 
 //For registry parameters
