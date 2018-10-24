@@ -2,7 +2,8 @@
 The master branch is based on https://github.com/ulli-kroll/rtl8821au branch v4.3.22-beta/rework.
 According to rtw_version.c the real driver version is 4.3.20.
 
-TO FIX CHANNEL NOT LOCKING ADD THIS TO /etc/NetworkManager/NetworkManager.conf
+TO FIX CHANNEL NOT LOCKING ADD THIS TO
+/etc/NetworkManager/NetworkManager.conf
 `[keyfile]
 unmanaged-devices=interface-name:wlx00c0ca96447b`
 
